@@ -3,6 +3,56 @@ import streamlit as st
 from scipy.optimize import linear_sum_assignment
 from supabase import create_client
 
+def cargar_apartamentos_iniciales():
+    apartamentos_existentes = cargar_tabla("apartamentos")
+
+    if not apartamentos_existentes.empty:
+        return
+    apartamentos = [
+    {"nombre": "Apt101", "price": 1800000, "zona": "Chapinero", "distancia": 1.2, "pet_friendly": True, "amenities": "gym,ascensor,parqueadero", "size": 52, "bedrooms": 2},
+    {"nombre": "Apt102", "price": 2200000, "zona": "Chapinero", "distancia": 2.0, "pet_friendly": True, "amenities": "gym,piscina,coworking", "size": 60, "bedrooms": 2},
+    {"nombre": "Apt103", "price": 1600000, "zona": "Chapinero", "distancia": 3.5, "pet_friendly": False, "amenities": "ascensor,seguridad", "size": 45, "bedrooms": 1},
+    {"nombre": "Apt104", "price": 2500000, "zona": "Chapinero", "distancia": 1.0, "pet_friendly": True, "amenities": "gym,terraza,piscina", "size": 70, "bedrooms": 3},
+    {"nombre": "Apt105", "price": 2000000, "zona": "Chapinero", "distancia": 2.8, "pet_friendly": True, "amenities": "coworking,ascensor", "size": 58, "bedrooms": 2},
+
+    {"nombre": "Apt201", "price": 1500000, "zona": "Suba", "distancia": 2.0, "pet_friendly": False, "amenities": "ascensor,seguridad", "size": 42, "bedrooms": 1},
+    {"nombre": "Apt202", "price": 1700000, "zona": "Suba", "distancia": 3.2, "pet_friendly": True, "amenities": "parqueadero,seguridad", "size": 50, "bedrooms": 2},
+    {"nombre": "Apt203", "price": 1900000, "zona": "Suba", "distancia": 1.8, "pet_friendly": True, "amenities": "gym,ascensor", "size": 55, "bedrooms": 2},
+    {"nombre": "Apt204", "price": 2100000, "zona": "Suba", "distancia": 4.0, "pet_friendly": False, "amenities": "piscina,seguridad", "size": 65, "bedrooms": 3},
+    {"nombre": "Apt205", "price": 1300000, "zona": "Suba", "distancia": 2.7, "pet_friendly": True, "amenities": "ascensor", "size": 38, "bedrooms": 1},
+
+    {"nombre": "Apt301", "price": 2300000, "zona": "Usaquén", "distancia": 1.5, "pet_friendly": True, "amenities": "gym,parqueadero,seguridad", "size": 62, "bedrooms": 2},
+    {"nombre": "Apt302", "price": 2700000, "zona": "Usaquén", "distancia": 2.2, "pet_friendly": True, "amenities": "gym,piscina,terraza", "size": 75, "bedrooms": 3},
+    {"nombre": "Apt303", "price": 1900000, "zona": "Usaquén", "distancia": 3.0, "pet_friendly": False, "amenities": "ascensor,coworking", "size": 50, "bedrooms": 2},
+    {"nombre": "Apt304", "price": 3100000, "zona": "Usaquén", "distancia": 1.1, "pet_friendly": True, "amenities": "gym,piscina,parqueadero,seguridad", "size": 85, "bedrooms": 3},
+    {"nombre": "Apt305", "price": 1600000, "zona": "Usaquén", "distancia": 4.5, "pet_friendly": False, "amenities": "seguridad", "size": 44, "bedrooms": 1},
+
+    {"nombre": "Apt401", "price": 1700000, "zona": "Teusaquillo", "distancia": 1.4, "pet_friendly": True, "amenities": "ascensor,coworking", "size": 48, "bedrooms": 1},
+    {"nombre": "Apt402", "price": 2100000, "zona": "Teusaquillo", "distancia": 2.1, "pet_friendly": True, "amenities": "gym,terraza", "size": 56, "bedrooms": 2},
+    {"nombre": "Apt403", "price": 2400000, "zona": "Teusaquillo", "distancia": 1.9, "pet_friendly": False, "amenities": "parqueadero,seguridad", "size": 65, "bedrooms": 3},
+    {"nombre": "Apt404", "price": 1450000, "zona": "Teusaquillo", "distancia": 3.5, "pet_friendly": True, "amenities": "ascensor", "size": 40, "bedrooms": 1},
+    {"nombre": "Apt405", "price": 2800000, "zona": "Teusaquillo", "distancia": 0.9, "pet_friendly": True, "amenities": "gym,piscina,coworking,terraza", "size": 78, "bedrooms": 3},
+
+    {"nombre": "Apt501", "price": 1200000, "zona": "Centro", "distancia": 1.0, "pet_friendly": False, "amenities": "seguridad", "size": 35, "bedrooms": 1},
+    {"nombre": "Apt502", "price": 1550000, "zona": "Centro", "distancia": 2.5, "pet_friendly": True, "amenities": "ascensor,coworking", "size": 45, "bedrooms": 1},
+    {"nombre": "Apt503", "price": 1850000, "zona": "Centro", "distancia": 1.7, "pet_friendly": True, "amenities": "gym,ascensor", "size": 52, "bedrooms": 2},
+    {"nombre": "Apt504", "price": 2250000, "zona": "Centro", "distancia": 3.0, "pet_friendly": False, "amenities": "parqueadero,seguridad", "size": 60, "bedrooms": 2},
+    {"nombre": "Apt505", "price": 2600000, "zona": "Centro", "distancia": 1.3, "pet_friendly": True, "amenities": "terraza,piscina,gym", "size": 72, "bedrooms": 3},
+
+    {"nombre": "Apt601", "price": 1100000, "zona": "Kennedy", "distancia": 2.2, "pet_friendly": False, "amenities": "seguridad", "size": 36, "bedrooms": 1},
+    {"nombre": "Apt602", "price": 1400000, "zona": "Kennedy", "distancia": 3.1, "pet_friendly": True, "amenities": "ascensor,parqueadero", "size": 43, "bedrooms": 1},
+    {"nombre": "Apt603", "price": 1750000, "zona": "Kennedy", "distancia": 2.6, "pet_friendly": True, "amenities": "gym,seguridad", "size": 55, "bedrooms": 2},
+    {"nombre": "Apt604", "price": 2000000, "zona": "Kennedy", "distancia": 4.2, "pet_friendly": False, "amenities": "piscina,parqueadero", "size": 66, "bedrooms": 3},
+    {"nombre": "Apt605", "price": 2300000, "zona": "Kennedy", "distancia": 1.8, "pet_friendly": True, "amenities": "gym,piscina,terraza", "size": 74, "bedrooms": 3},
+
+    {"nombre": "Apt701", "price": 1350000, "zona": "Engativá", "distancia": 2.0, "pet_friendly": True, "amenities": "ascensor,seguridad", "size": 41, "bedrooms": 1},
+    {"nombre": "Apt702", "price": 1650000, "zona": "Engativá", "distancia": 2.8, "pet_friendly": False, "amenities": "parqueadero", "size": 49, "bedrooms": 2},
+    {"nombre": "Apt703", "price": 1950000, "zona": "Engativá", "distancia": 1.6, "pet_friendly": True, "amenities": "gym,coworking", "size": 57, "bedrooms": 2},
+    {"nombre": "Apt704", "price": 2150000, "zona": "Engativá", "distancia": 3.7, "pet_friendly": True, "amenities": "piscina,ascensor", "size": 68, "bedrooms": 3},
+    {"nombre": "Apt705", "price": 2450000, "zona": "Engativá", "distancia": 1.2, "pet_friendly": False, "amenities": "gym,terraza,seguridad", "size": 76, "bedrooms": 3},
+]
+    for apt in apartamentos:
+        supabase.table("apartamentos").insert(apt).execute()
 
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
@@ -175,7 +225,7 @@ def ejecutar_matching():
 
     return W, pd.DataFrame(resultados)
 
-
+cargar_apartamentos_iniciales()
 st.title("Sistema de Matching de Apartamentos")
 st.write("Base de datos remota en Supabase + algoritmo húngaro.")
 
