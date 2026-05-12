@@ -1,111 +1,44 @@
-import sqlite3
 import pandas as pd
 import streamlit as st
 from scipy.optimize import linear_sum_assignment
-
-DB_NAME = "database.db"
-
-
-def conectar():
-    return sqlite3.connect(DB_NAME)
+from supabase import create_client
 
 
-def crear_tablas():
-    conn = conectar()
-    cursor = conn.cursor()
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS usuarios (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre TEXT,
-        budget REAL,
-        zona TEXT,
-        radio REAL,
-        pets INTEGER,
-        amenities_req TEXT,
-        size_deseado REAL,
-        bedrooms_deseado INTEGER
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS apartamentos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre TEXT,
-        price REAL,
-        zona TEXT,
-        distancia REAL,
-        pet_friendly INTEGER,
-        amenities TEXT,
-        size REAL,
-        bedrooms INTEGER
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS asignaciones (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        usuario_id INTEGER,
-        apartamento_id INTEGER,
-        peso REAL
-    )
-    """)
-
-    conn.commit()
-    conn.close()
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 def insertar_usuario(nombre, budget, zona, radio, pets, amenities_req, size_deseado, bedrooms_deseado):
-    conn = conectar()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-    INSERT INTO usuarios
-    (nombre, budget, zona, radio, pets, amenities_req, size_deseado, bedrooms_deseado)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        nombre,
-        budget,
-        zona,
-        radio,
-        int(pets),
-        ",".join(amenities_req),
-        size_deseado,
-        bedrooms_deseado
-    ))
-
-    conn.commit()
-    conn.close()
+    supabase.table("usuarios").insert({
+        "nombre": nombre,
+        "budget": budget,
+        "zona": zona,
+        "radio": radio,
+        "pets": pets,
+        "amenities_req": ",".join(amenities_req),
+        "size_deseado": size_deseado,
+        "bedrooms_deseado": bedrooms_deseado
+    }).execute()
 
 
 def insertar_apartamento(nombre, price, zona, distancia, pet_friendly, amenities, size, bedrooms):
-    conn = conectar()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-    INSERT INTO apartamentos
-    (nombre, price, zona, distancia, pet_friendly, amenities, size, bedrooms)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        nombre,
-        price,
-        zona,
-        distancia,
-        int(pet_friendly),
-        ",".join(amenities),
-        size,
-        bedrooms
-    ))
-
-    conn.commit()
-    conn.close()
+    supabase.table("apartamentos").insert({
+        "nombre": nombre,
+        "price": price,
+        "zona": zona,
+        "distancia": distancia,
+        "pet_friendly": pet_friendly,
+        "amenities": ",".join(amenities),
+        "size": size,
+        "bedrooms": bedrooms
+    }).execute()
 
 
-def cargar_tabla(nombre_tabla):
-    conn = conectar()
-    df = pd.read_sql_query(f"SELECT * FROM {nombre_tabla}", conn)
-    conn.close()
-    return df
+def cargar_tabla(tabla):
+    response = supabase.table(tabla).select("*").execute()
+    return pd.DataFrame(response.data)
 
 
 def texto_a_lista(texto):
@@ -121,7 +54,7 @@ def calcular_peso(usuario, apt):
     if apt["distancia"] > usuario["radio"]:
         return 0
 
-    if usuario["pets"] == 1 and apt["pet_friendly"] == 0:
+    if usuario["pets"] and not apt["pet_friendly"]:
         return 0
 
     requeridos = set(texto_a_lista(usuario["amenities_req"]))
@@ -164,7 +97,7 @@ def construir_matriz():
     apartamentos = cargar_tabla("apartamentos")
 
     if usuarios.empty or apartamentos.empty:
-        return None
+        return None, usuarios, apartamentos
 
     matriz = []
 
@@ -180,11 +113,29 @@ def construir_matriz():
         columns=apartamentos["id"]
     )
 
-    return W
+    return W, usuarios, apartamentos
+
+
+def limpiar_asignaciones():
+    asignaciones = cargar_tabla("asignaciones")
+
+    if asignaciones.empty:
+        return
+
+    for asignacion_id in asignaciones["id"]:
+        supabase.table("asignaciones").delete().eq("id", int(asignacion_id)).execute()
+
+
+def guardar_asignacion(usuario_id, apartamento_id, peso):
+    supabase.table("asignaciones").insert({
+        "usuario_id": int(usuario_id),
+        "apartamento_id": int(apartamento_id),
+        "peso": float(peso)
+    }).execute()
 
 
 def ejecutar_matching():
-    W = construir_matriz()
+    W, usuarios, apartamentos = construir_matriz()
 
     if W is None:
         return None, None
@@ -200,9 +151,7 @@ def ejecutar_matching():
 
     filas, columnas = linear_sum_assignment(C)
 
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM asignaciones")
+    limpiar_asignaciones()
 
     resultados = []
 
@@ -213,46 +162,22 @@ def ejecutar_matching():
             usuario_id = int(W.index[i])
             apartamento_id = int(W.columns[j])
 
-            cursor.execute("""
-            INSERT INTO asignaciones (usuario_id, apartamento_id, peso)
-            VALUES (?, ?, ?)
-            """, (usuario_id, apartamento_id, float(peso)))
+            guardar_asignacion(usuario_id, apartamento_id, peso)
+
+            usuario_nombre = usuarios.loc[usuarios["id"] == usuario_id, "nombre"].values[0]
+            apartamento_nombre = apartamentos.loc[apartamentos["id"] == apartamento_id, "nombre"].values[0]
 
             resultados.append({
-                "usuario_id": usuario_id,
-                "apartamento_id": apartamento_id,
+                "usuario": usuario_nombre,
+                "apartamento": apartamento_nombre,
                 "peso": peso
             })
-
-    conn.commit()
-    conn.close()
 
     return W, pd.DataFrame(resultados)
 
 
-def asignaciones_detalladas():
-    conn = conectar()
-
-    query = """
-    SELECT 
-        u.nombre AS usuario,
-        a.nombre AS apartamento,
-        asig.peso
-    FROM asignaciones asig
-    JOIN usuarios u ON asig.usuario_id = u.id
-    JOIN apartamentos a ON asig.apartamento_id = a.id
-    """
-
-    df = pd.read_sql_query(query, conn)
-
-    conn.close()
-    return df
-
-
-crear_tablas()
-
 st.title("Sistema de Matching de Apartamentos")
-st.write("Registro dinámico de usuarios, apartamentos y asignación óptima usando algoritmo húngaro.")
+st.write("Base de datos remota en Supabase + algoritmo húngaro.")
 
 menu = st.sidebar.selectbox(
     "Menú",
@@ -285,12 +210,13 @@ zonas = [
     "Engativá"
 ]
 
+
 if menu == "Registrar usuario":
     st.header("Registrar usuario")
 
     with st.form("form_usuario"):
         nombre = st.text_input("Nombre")
-        budget = st.number_input("Presupuesto máximo", min_value=0, step=100000)
+        budget = st.number_input("Presupuesto máximo", min_value=0.0, step=100000.0)
         zona = st.selectbox("Zona preferida", zonas)
         radio = st.number_input("Radio máximo en km", min_value=0.0, step=0.5)
         pets = st.checkbox("Tiene mascota")
@@ -311,16 +237,17 @@ if menu == "Registrar usuario":
                 size_deseado,
                 bedrooms_deseado
             )
-            st.success("Usuario guardado correctamente.")
+            st.success("Usuario guardado en Supabase.")
+
 
 elif menu == "Registrar apartamento":
     st.header("Registrar apartamento")
 
     with st.form("form_apartamento"):
         nombre = st.text_input("Nombre o código del apartamento")
-        price = st.number_input("Precio", min_value=0, step=100000)
+        price = st.number_input("Precio", min_value=0.0, step=100000.0)
         zona = st.selectbox("Zona", zonas)
-        distancia = st.number_input("Distancia al usuario/zona en km", min_value=0.0, step=0.5)
+        distancia = st.number_input("Distancia en km", min_value=0.0, step=0.5)
         pet_friendly = st.checkbox("Pet friendly")
         amenities = st.multiselect("Amenities disponibles", amenities_opciones)
         size = st.number_input("Tamaño en m²", min_value=1.0, step=1.0)
@@ -339,10 +266,11 @@ elif menu == "Registrar apartamento":
                 size,
                 bedrooms
             )
-            st.success("Apartamento guardado correctamente.")
+            st.success("Apartamento guardado en Supabase.")
+
 
 elif menu == "Ver base de datos":
-    st.header("Base de datos actual")
+    st.header("Base de datos remota")
 
     st.subheader("Usuarios")
     st.dataframe(cargar_tabla("usuarios"))
@@ -351,7 +279,8 @@ elif menu == "Ver base de datos":
     st.dataframe(cargar_tabla("apartamentos"))
 
     st.subheader("Asignaciones")
-    st.dataframe(asignaciones_detalladas())
+    st.dataframe(cargar_tabla("asignaciones"))
+
 
 elif menu == "Ejecutar matching":
     st.header("Matching óptimo")
@@ -366,16 +295,16 @@ elif menu == "Ejecutar matching":
             st.dataframe(W)
 
             st.subheader("Asignaciones óptimas")
-            detalladas = asignaciones_detalladas()
-            st.dataframe(detalladas)
+            st.dataframe(resultado)
 
-            if not detalladas.empty:
-                peso_total = detalladas["peso"].sum()
-                peso_promedio = detalladas["peso"].mean()
-                cobertura = len(detalladas) / len(cargar_tabla("usuarios")) * 100
+            if not resultado.empty:
+                peso_total = resultado["peso"].sum()
+                peso_promedio = resultado["peso"].mean()
+                usuarios = cargar_tabla("usuarios")
+                cobertura = len(resultado) / len(usuarios) * 100
 
                 st.metric("Peso total", round(peso_total, 3))
                 st.metric("Peso promedio", round(peso_promedio, 3))
                 st.metric("Cobertura de usuarios", f"{round(cobertura, 2)}%")
             else:
-                st.warning("No hubo asignaciones válidas.") 
+                st.warning("No hubo asignaciones válidas.")
