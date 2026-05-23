@@ -4,3 +4,4 @@
 .venv/
 database.db
 .streamlit/secrets.toml
+.claude/

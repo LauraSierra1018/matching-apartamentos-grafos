@@ -32,11 +32,17 @@ def crear_tablas():
         nombre TEXT,
         price REAL,
         zona TEXT,
+        barrio TEXT,
         distancia REAL,
         pet_friendly INTEGER,
         amenities TEXT,
         size REAL,
-        bedrooms INTEGER
+        bedrooms INTEGER,
+        latitud REAL,
+        longitud REAL,
+        url TEXT,
+        descripcion TEXT,
+        imagen TEXT
     )
     """)
 
@@ -88,23 +94,31 @@ def insertar_usuario(nombre, budget, zona, radio, pets, amenities_req, size_dese
     conn.close()
 
 
-def insertar_apartamento(nombre, price, zona, distancia, pet_friendly, amenities, size, bedrooms):
+def insertar_apartamento(nombre, price, zona, distancia, pet_friendly, amenities, size, bedrooms,
+                         url="", descripcion="", imagen="", barrio="", latitud=None, longitud=None):
     conn = conectar()
     cursor = conn.cursor()
 
     cursor.execute("""
     INSERT INTO apartamentos
-    (nombre, price, zona, distancia, pet_friendly, amenities, size, bedrooms)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    (nombre, price, zona, barrio, distancia, pet_friendly, amenities, size, bedrooms,
+     latitud, longitud, url, descripcion, imagen)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         nombre,
         price,
         zona,
+        barrio,
         distancia,
         int(pet_friendly),
         ",".join(amenities),
         size,
-        bedrooms
+        bedrooms,
+        latitud,
+        longitud,
+        url,
+        descripcion,
+        imagen,
     ))
 
     conn.commit()
@@ -152,7 +166,7 @@ def cargar_asignaciones_detalladas():
     conn = conectar()
 
     query = """
-    SELECT 
+    SELECT
         u.nombre AS usuario,
         a.nombre AS apartamento,
         asig.peso
